@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chord Trainer</title>
+<style>
+:root{--bg:#f3f5f4;--ink:#1c2523;--mute:#5f6d69;--card:#fff;--line:#cfd8d5;--accent:#1f6f66;--ok:#2e8b57;--bad:#c0392b;--key:#fdfdfb;--black:#1c2523;--sel:#7fc8bd;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121816;--ink:#e6eeec;--mute:#93a39e;--card:#1b2421;--line:#32403c;--accent:#4fb3a6;--ok:#4cc38a;--bad:#ef6b5b;--key:#e9eeec;--black:#0b0f0e;--sel:#3f9a8f}}
+:root[data-theme="dark"]{--bg:#121816;--ink:#e6eeec;--mute:#93a39e;--card:#1b2421;--line:#32403c;--accent:#4fb3a6;--ok:#4cc38a;--bad:#ef6b5b;--key:#e9eeec;--black:#0b0f0e;--sel:#3f9a8f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Iowan Old Style",serif;line-height:1.5}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+[hidden]{display:none!important}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px}h1{font-size:1.3rem;margin:0;font-weight:600}#cog{font-size:1.4rem;line-height:1;padding:6px 12px;min-width:44px}
+p.sub{margin:0 0 18px;color:var(--mute);font-size:.95rem}
+.stage{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:22px 16px;text-align:center}
+#chord{font-size:clamp(3rem,14vw,5.5rem);line-height:1.1;font-weight:600;letter-spacing:-.02em}
+#staff{display:block;width:100%;max-width:760px;margin:0 auto}#sym{min-height:1.6em;font-size:1.5rem;font-weight:600}#msg{min-height:1.6em;margin-top:6px;font-size:1.05rem;color:var(--mute)}
+#msg.ok{color:var(--ok)}#msg.bad{color:var(--bad)}
+.row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+button{font:inherit;font-size:.95rem;padding:9px 16px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.kbwrap{overflow-x:auto;margin-top:18px;padding-bottom:4px}
+#kb{position:relative;height:170px;min-width:880px;display:flex;user-select:none;touch-action:manipulation}
+.w{flex:1;background:var(--key);border:1px solid #9aa7a3;border-radius:0 0 5px 5px;cursor:pointer;position:relative}
+.b{position:absolute;top:0;width:2.2%;height:62%;background:var(--black);border-radius:0 0 4px 4px;cursor:pointer;z-index:2;border:0}
+.w.sel{background:var(--sel)}.b.sel{background:var(--accent)}
+.w.good{background:var(--ok)}.b.good{background:var(--ok)}
+.w.miss{box-shadow:inset 0 -10px 0 var(--bad)}.b.miss{box-shadow:inset 0 -10px 0 var(--bad)}
+.w.hint::after,.b.hint::after{content:"";position:absolute;left:50%;bottom:8px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--accent)}
+.b.hint::after{bottom:14px;background:#fff}
+fieldset{border:1px solid var(--line);border-radius:10px;margin:18px 0 0;padding:10px 14px;background:var(--card)}
+legend{padding:0 6px;color:var(--mute);font-size:.9rem}
+fieldset label{display:inline-flex;align-items:center;gap:6px;margin:4px 14px 4px 0;font-size:.95rem}
+.stats{display:flex;gap:22px;justify-content:center;margin-top:12px;color:var(--mute);font-size:.95rem}
+.stats b{color:var(--ink)}
+#midi{margin-top:10px;font-size:.88rem;color:var(--mute);text-align:center}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Music&display=swap">
+</head>
+<body>
+<main>
+<div class="top"><h1 id="title">Chord Trainer</h1><button id="cog" aria-label="Settings" title="Settings">⚙</button></div>
+<div id="trainer">
+<div class="stage">
+  <div id="chord"></div><div id="sym" aria-live="polite"></div>
+  <div id="msg"></div>
+  <div class="kbwrap"><div id="kb" aria-label="Piano keyboard"></div></div>
+  <div class="row">
+    <button class="primary" id="check">Check</button>
+    <button id="clear">Clear keys</button>
+    <button id="show">Show answer</button>
+    <button id="next">Next chord</button>
+  </div>
+  <div class="stats"><span>Correct <b id="sc">0</b></span><span>Attempts <b id="at">0</b></span><span>Streak <b id="st">0</b></span></div>
+  <div id="midi"><button id="midibtn">Use a MIDI keyboard</button> <span id="midistatus"></span></div>
+</div>
+
+</div>
+<div id="settings" hidden>
+<fieldset><legend>Chord types</legend><div id="types"></div></fieldset>
+<fieldset><legend>Options</legend>
+  <label><input type="checkbox" id="auto" checked> Check automatically when I press enough keys</label>
+  <label><input type="checkbox" id="sound" checked> Play sound</label>
+  <div><label><input type="radio" name="clef" value="treble" checked> Treble clef</label>
+  <label><input type="radio" name="clef" value="bass"> Bass clef</label>
+  <label><input type="radio" name="clef" value="mixed"> Mixed (random)</label></div>
+  <label><input type="checkbox" id="adv" checked> Go to the next chord when I get it right</label>
+  <label>Chords on screen <select id="ahead"><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
+  <label><input type="checkbox" id="shown"> Show chord name</label>
+  <label><input type="checkbox" id="ign" checked> Ignore octave</label>
+</fieldset>
+</div>
+</main>
+
+<script>
+(function(){
+var NAMES_S=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+var NAMES_F=["C","Db","D","Eb","E","F","Gb","G","Ab","A","Bb","B"];
+var ROOTS=["C","Db","D","Eb","E","F","F#","G","Ab","A","Bb","B"];
+var ROOT_PC={"C":0,"Db":1,"D":2,"Eb":3,"E":4,"F":5,"F#":6,"G":7,"Ab":8,"A":9,"Bb":10,"B":11};
+var TYPES=[
+ {id:"maj",label:"Major",sym:"",iv:[0,4,7],on:true},
+ {id:"min",label:"Minor",sym:"m",iv:[0,3,7],on:true},
+ {id:"dim",label:"Diminished",sym:"dim",iv:[0,3,6],on:false},
+ {id:"aug",label:"Augmented",sym:"aug",iv:[0,4,8],on:false},
+ {id:"sus4",label:"Sus4",sym:"sus4",iv:[0,5,7],on:false},
+ {id:"7",label:"Dominant 7",sym:"7",iv:[0,4,7,10],on:false},
+ {id:"maj7",label:"Major 7",sym:"maj7",iv:[0,4,7,11],on:false},
+ {id:"m7",label:"Minor 7",sym:"m7",iv:[0,3,7,10],on:false},
+ {id:"m7b5",label:"Half-diminished",sym:"m7b5",iv:[0,3,6,10],on:false},
+ {id:"dim7",label:"Diminished 7",sym:"dim7",iv:[0,3,6,9],on:false}
+];
+var START=36, WHITES=28; // C2 to B5
+var WPC=[0,2,4,5,7,9,11], BLACK_AFTER={0:1,1:3,3:6,4:8,5:10};
+var kb=document.getElementById("kb"), keyEls={}, selected={}, cur=null, done=false, score=0, tries=0, streak=0, ctx=null;
+
+function build(){
+  var w=0;
+  for(var i=0;i<WHITES;i++){
+    var oct=Math.floor(i/7), d=i%7, midi=START+oct*12+WPC[d];
+    var el=document.createElement("div");
+    el.className="w"; el.dataset.m=midi; keyEls[midi]=el; kb.appendChild(el);
+    if(BLACK_AFTER[d]!==undefined && i<WHITES-1){
+      var bm=midi+1, b=document.createElement("div");
+      b.className="b"; b.dataset.m=bm; keyEls[bm]=b;
+      b.style.left=((i+1)*100/WHITES-1.1)+"%";
+      kb.appendChild(b);
+    }
+  }
+  var pd=null, wrap=kb.parentNode;
+  kb.addEventListener("pointerdown",function(e){
+    var t=e.target.closest("[data-m]");
+    pd=t?{m:+t.dataset.m,x:e.clientX,y:e.clientY,s:wrap.scrollLeft}:null;
+  });
+  kb.addEventListener("pointerup",function(e){
+    var p=pd; pd=null; if(!p) return;
+    var t=e.target.closest("[data-m]");
+    if(!t||+t.dataset.m!==p.m) return;
+    if(Math.abs(e.clientX-p.x)>8||Math.abs(e.clientY-p.y)>8||Math.abs(wrap.scrollLeft-p.s)>2) return;
+    toggle(p.m,true);
+  });
+  kb.addEventListener("pointercancel",function(){pd=null});
+}
+function beep(m){
+  if(!document.getElementById("sound").checked) return;
+  try{
+    ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
+    var o=ctx.createOscillator(), g=ctx.createGain();
+    o.type="triangle"; o.frequency.value=440*Math.pow(2,(m-69)/12);
+    g.gain.setValueAtTime(.18,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.7);
+    o.connect(g); g.connect(ctx.destination); o.start(); o.stop(ctx.currentTime+.7);
+  }catch(e){}
+}
+function toggle(m,sound){
+  if(done) return;
+  if(selected[m]) delete selected[m]; else { selected[m]=1; if(sound) beep(m); }
+  paint();
+  if(document.getElementById("auto").checked && cur && Object.keys(selected).length>=cur.pcs.length) check();
+}
+function paint(){
+  for(var m in keyEls){ keyEls[m].classList.toggle("sel",!!selected[m]); }
+}
+function pcsOf(){ var s={}; Object.keys(selected).forEach(function(m){s[m%12]=1}); return s; }
+function names(c){ return c.notes.map(function(x){return x.name}); }
+function msg(t,c){ var m=document.getElementById("msg"); m.textContent=t; m.className=c||""; }
+function activeTypes(){ return TYPES.filter(function(t){return document.getElementById("t_"+t.id).checked}); }
+var advT, LET="CDEFGAB", NAT=[0,2,4,5,7,9,11], ACC={"1":"\u266F","2":"\u266F\u266F","-1":"\u266D","-2":"\u266D\u266D"};
+function spell(r,t,clef){
+  var li=LET.indexOf(r[0]), rp=ROOT_PC[r];
+  var st=t.id==="sus4"?[0,3,4]:(t.iv.length===3?[0,2,4]:[0,2,4,6]);
+  var lo=clef==="bass"?16:28, hi=lo+12-st[st.length-1], cand=[], out=[];
+  for(var d=lo;d<=hi;d++) if(d%7===li) cand.push(d);
+  var rd=cand[Math.floor(Math.random()*cand.length)];
+  t.iv.forEach(function(iv,k){
+    var dia=rd+st[k], l=dia%7, acc=((((rp+iv)%12)-NAT[l]+18)%12)-6;
+    out.push({dia:dia,acc:acc,midi:12*(Math.floor(dia/7)+1)+NAT[l]+acc,
+      name:LET[l]+(acc>0?"#".repeat(acc):"b".repeat(-acc))});
+  });
+  return out;
+}
+var NS="http://www.w3.org/2000/svg", queue=[], N=4, GAP=80, X0=110;
+function chordSvg(c){
+  var s="", ai=0, prev=null, pd=false, tr=c.clef==="treble", L;
+  var Y=function(d){return 80-(d-30)*5};
+  var ln=function(x,L){return '<line x1="'+(x-12)+'" x2="'+(x+12)+'" y1="'+L+'" y2="'+L+'" stroke="currentColor"/>'};
+  c.notes.forEach(function(n){
+    var y=Y(n.dia), disp=prev!==null&&n.dia-prev===1&&!pd, x=disp?12:0;
+    pd=disp; prev=n.dia;
+    if(tr){ for(L=30;L>=10;L-=10) if(y<=L) s+=ln(x,L); for(L=90;L<=110;L+=10) if(y>=L) s+=ln(x,L); }
+    else { for(L=90;L>=70;L-=10) if(y<=L) s+=ln(x,L); for(L=150;L<=170;L+=10) if(y>=L) s+=ln(x,L); }
+    s+='<ellipse cx="'+x+'" cy="'+y+'" rx="7" ry="5" fill="none" stroke="currentColor" stroke-width="2"/>';
+    if(n.acc){ s+='<text x="'+(-12-(ai%2)*(Math.abs(n.acc)>1?22:14))+'" y="'+(y+7)+'" text-anchor="end" font-size="24" fill="currentColor">'+ACC[n.acc]+'</text>'; ai++; }
+  });
+  return s;
+}
+function makeChord(){
+  var ts=activeTypes(); if(!ts.length) ts=[TYPES[0]];
+  var mode=document.querySelector('input[name=clef]:checked').value;
+  var clef=mode==="mixed"?(Math.random()<.5?"treble":"bass"):mode, t, r, k=0;
+  var last=queue.length?queue[queue.length-1].sym:"";
+  do{ t=ts[Math.floor(Math.random()*ts.length)]; r=ROOTS[Math.floor(Math.random()*12)]; k++; }while(last===r+t.sym&&k<20);
+  var notes=spell(r,t,clef);
+  return {sym:r+t.sym,clef:clef,notes:notes,pcs:notes.map(function(x){return x.midi%12})};
+}
+function buildStaff(){
+  var W=X0+(N-1)*GAP+60, s="";
+  [40,100].forEach(function(t){ for(var i=0;i<5;i++) s+='<line x1="10" x2="'+(W-10)+'" y1="'+(t+i*10)+'" y2="'+(t+i*10)+'" stroke="currentColor"/>'; });
+  s+='<line x1="10" x2="10" y1="40" y2="140" stroke="currentColor" stroke-width="2"/><path d="M8 40Q-2 90 8 140" fill="none" stroke="currentColor" stroke-width="3"/>';
+  var ff='font-size="40" font-family="\'Noto Music\',\'Bravura Text\',serif" fill="currentColor"';
+  s+='<text x="16" y="80.5" '+ff+'>\u{1D11E}</text><text x="16" y="136" '+ff+'>\u{1D122}</text><g id="cg"></g>';
+  document.getElementById("chord").innerHTML='<svg id="staff" viewBox="0 20 '+W+' 150" role="img" aria-label="Upcoming chords on a grand staff">'+s+'</svg>';
+}
+function mkG(c,slot){
+  var g=document.createElementNS(NS,"g");
+  g.innerHTML=chordSvg(c);
+  g.style.transform="translateX("+(X0+slot*GAP)+"px)";
+  g.style.transition="transform .4s ease,opacity .4s ease";
+  g.style.opacity=0;
+  c.el=g; document.getElementById("cg").appendChild(g);
+}
+function layout(){
+  document.getElementById("cg").getBoundingClientRect();
+  queue.forEach(function(c,i){ c.el.style.transform="translateX("+(X0+i*GAP)+"px)"; c.el.style.opacity=1; });
+}
+function clearKeys(){ for(var m in keyEls) keyEls[m].classList.remove("good","miss","hint"); }
+function showSym(on){ document.getElementById("sym").textContent=(on||document.getElementById("shown").checked)&&cur?cur.sym:""; }
+function reset(){
+  clearTimeout(advT);
+  if(!activeTypes().length){ msg("Pick at least one chord type in settings.","bad"); return; }
+  N=+document.getElementById("ahead").value;
+  queue=[]; for(var i=0;i<N;i++) queue.push(makeChord());
+  buildStaff();
+  queue.forEach(function(c,i){ mkG(c,i); });
+  cur=queue[0]; selected={}; done=false; clearKeys(); paint(); layout(); showSym(false); msg("");
+}
+function next(){
+  clearTimeout(advT);
+  if(!queue.length){ reset(); return; }
+  var old=queue.shift();
+  old.el.style.transform="translateX("+(X0-GAP)+"px)"; old.el.style.opacity=0;
+  setTimeout(function(){ if(old.el.parentNode) old.el.parentNode.removeChild(old.el); },450);
+  var c=makeChord(); queue.push(c); mkG(c,N);
+  cur=queue[0]; selected={}; done=false; clearKeys(); paint(); layout(); showSym(false); msg("");
+}
+function check(){
+  if(!cur||done) return;
+  var ign=document.getElementById("ign").checked;
+  var key=function(m){return ign?m%12:+m};
+  var want={}, got={};
+  cur.notes.forEach(function(n){want[key(n.midi)]=1});
+  Object.keys(selected).forEach(function(m){got[key(m)]=1});
+  var wk=Object.keys(want), gk=Object.keys(got);
+  var ok=gk.length===wk.length && gk.every(function(k){return want[k]});
+  tries++; done=true;
+  Object.keys(selected).forEach(function(m){ keyEls[m].classList.add(want[key(m)]?"good":"miss"); });
+  showSym(true);
+  if(ok){ cur.el.style.color="var(--ok)"; score++; streak++; msg("Correct. "+cur.sym+": "+names(cur).join(" \u2013 "),"ok"); if(document.getElementById("adv").checked) advT=setTimeout(next,700); }
+  else{
+    streak=0;
+    var missing=cur.notes.filter(function(n){return !got[key(n.midi)]}).map(function(n){return n.name});
+    msg("Not quite. "+(missing.length?"Missing "+missing.join(", ")+". ":"")+cur.sym+": "+names(cur).join(" \u2013 "),"bad");
+    reveal();
+  }
+  stats();
+}
+function reveal(){
+  cur.notes.forEach(function(n){ var el=keyEls[n.midi]; if(el) el.classList.add("hint"); });
+}
+function stats(){
+  document.getElementById("sc").textContent=score;
+  document.getElementById("at").textContent=tries;
+  document.getElementById("st").textContent=streak;
+}
+document.getElementById("check").onclick=check;
+document.getElementById("clear").onclick=function(){ if(done) return; selected={}; paint(); };
+document.getElementById("next").onclick=next;
+document.getElementById("show").onclick=function(){
+  if(!cur) return; if(!done){ done=true; streak=0; tries++; stats(); }
+  reveal(); showSym(true); msg(cur.sym+": "+names(cur).join(" – "),"bad");
+};
+document.addEventListener("keydown",function(e){
+  if(e.target.tagName==="INPUT"||e.target.tagName==="BUTTON"||settingsOpen) return;
+  if(e.key==="Enter"){ done?next():check(); }
+});
+
+// Chord type checkboxes
+var tw=document.getElementById("types");
+TYPES.forEach(function(t){
+  var l=document.createElement("label");
+  l.innerHTML='<input type="checkbox" id="t_'+t.id+'"'+(t.on?" checked":"")+'> '+t.label;
+  tw.appendChild(l);
+});
+
+// Optional MIDI input
+var held={};
+document.getElementById("midibtn").onclick=function(){
+  var s=document.getElementById("midistatus");
+  if(!navigator.requestMIDIAccess){ s.textContent="This browser has no MIDI support. Open the link in Chrome."; return; }
+  function onMsg(ev){
+    var st=ev.data[0]&0xf0, note=ev.data[1], vel=ev.data[2];
+    if(st===0x90&&vel>0){
+      if(done||settingsOpen) return;
+      var m=note; while(m<START)m+=12; while(m>=START+48)m-=12;
+      selected[m]=1; held[note]=m; paint();
+      if(document.getElementById("auto").checked && cur && Object.keys(selected).length>=cur.pcs.length) check();
+    }else if(st===0x80||(st===0x90&&vel===0)){
+      if(!done&&held[note]!==undefined){ delete selected[held[note]]; delete held[note]; paint(); }
+    }
+  }
+  function attach(a){
+    var n=0;
+    a.inputs.forEach(function(inp){ n++; inp.onmidimessage=onMsg; });
+    s.textContent=n?("Connected: "+n+" input"+(n>1?"s":"")+". Play the chord."):"No MIDI keyboard found. Plug it in and it will connect automatically.";
+  }
+  navigator.requestMIDIAccess().then(function(a){ attach(a); a.onstatechange=function(){ attach(a); }; })
+  .catch(function(){ s.textContent="MIDI is blocked here. Open this page in Chrome itself (not inside another app) and allow MIDI access."; });
+};
+var settingsOpen=false, changed=false;
+document.getElementById("settings").addEventListener("change",function(){changed=true});
+document.getElementById("cog").onclick=function(){
+  settingsOpen=!settingsOpen;
+  document.getElementById("trainer").hidden=settingsOpen;
+  document.getElementById("settings").hidden=!settingsOpen;
+  document.getElementById("title").textContent=settingsOpen?"Settings":"Chord Trainer";
+  this.textContent=settingsOpen?"Done":"\u2699";
+  this.setAttribute("aria-label",settingsOpen?"Back to trainer":"Settings");
+  if(!settingsOpen&&changed){ changed=false; reset(); }
+};
+build(); reset();
+document.querySelectorAll('input[name=clef]').forEach(function(r){r.onchange=reset});
+document.getElementById("shown").onchange=function(){showSym(done)};
+})();
+</script>
+</body>
+</html>
