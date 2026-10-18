@@ -147,7 +147,7 @@ var TYPES=[
  {id:"dim7",label:"Diminished 7",sym:"dim7",iv:[0,3,6,9],on:false}
 ];
 var START=36, WHITES=28, WPC=[0,2,4,5,7,9,11], BLACK_AFTER={0:1,1:3,3:6,4:8,5:10};
-var kb=$("kb"), keyEls={}, selected={}, cur=null, done=false, waiting=false, ctx=null, advT, retryT, held={}, viaMidi=false;
+var kb=$("kb"), keyEls={}, selected={}, cur=null, done=false, waiting=false, ctx=null, advT, retryT, advOn=false, retryOn=false, lastT=0, held={}, viaMidi=false;
 var NS="http://www.w3.org/2000/svg", queue=[], N=4, GAP=80, X0=110, total=20, generated=0, rec=[], wrongTotal=0;
 var SCALES=[
  {label:"Major (Ionian)",short:"major",iv:[0,2,4,5,7,9,11]},
@@ -272,7 +272,7 @@ function mkG(c,slot){
   var g=document.createElementNS(NS,"g");
   g.innerHTML=chordSvg(c);
   g.style.transform="translateX("+(X0+slot*GAP)+"px)";
-  g.style.transition="transform .4s ease,opacity .4s ease"; g.style.opacity=0;
+  g.style.transition="transform .25s ease,opacity .25s ease"; g.style.opacity=0;
   c.el=g; $("cg").appendChild(g);
 }
 function layout(){
@@ -293,9 +293,9 @@ function startSession(){
     session.label=disp(rn)+" "+sc.short;
     session.cap="Chords in "+session.label+": "+session.deg.map(function(d){return disp(d.name)}).join(" ");
   }
-  clearTimeout(advT); clearTimeout(retryT);
+  clearTimeout(advT); clearTimeout(retryT); advOn=false; retryOn=false;
   total=+$("qcount").value; N=Math.min(+$("ahead").value,total);
-  generated=0; rec=[]; wrongTotal=0; queue=[]; cur=null; selected={}; held={}; done=false; waiting=true;
+  generated=0; rec=[]; lastT=0; wrongTotal=0; queue=[]; cur=null; selected={}; held={}; done=false; waiting=true;
   clearKeys(); paint(); screen("play"); $("cap").textContent=session.cap; buildStaff(); showSym(false); msg("Play any key to start the session"); stats();
   window.scrollTo(0,0);
 }
@@ -307,18 +307,23 @@ function begin(){
 }
 function record(skip){
   if(!cur||cur.rec) return;
-  cur.rec=true; rec.push({sym:cur.sym,ms:performance.now()-cur.t0,wrong:cur.wrong,skip:skip}); stats();
+  var now=performance.now(); cur.rec=true; rec.push({sym:cur.sym,ms:now-cur.t0,wrong:cur.wrong,skip:skip}); lastT=now; stats();
+}
+function resetAttempt(){
+  if(!cur||waiting) return;
+  clearKeys(); cur.el.querySelectorAll("ellipse").forEach(function(e){ e.style.stroke=""; });
+  selected={}; done=false; paint(); msg("");
 }
 function next(){
-  clearTimeout(advT); clearTimeout(retryT);
+  clearTimeout(advT); clearTimeout(retryT); advOn=false; retryOn=false;
   if(!queue.length){ showResults(); return; }
   var old=queue.shift();
   old.el.style.transform="translateX("+(X0-GAP)+"px)"; old.el.style.opacity=0;
-  setTimeout(function(){ if(old.el.parentNode) old.el.parentNode.removeChild(old.el); },450);
+  setTimeout(function(){ if(old.el.parentNode) old.el.parentNode.removeChild(old.el); },300);
   if(generated<total){ var c=makeChord(); queue.push(c); mkG(c,N); }
   selected={}; done=false; clearKeys(); paint(); showSym(false); msg("");
-  if(!queue.length){ cur=null; done=true; stats(); setTimeout(showResults,500); return; }
-  cur=queue[0]; cur.t0=performance.now(); layout(); stats();
+  if(!queue.length){ cur=null; done=true; stats(); setTimeout(showResults,350); return; }
+  cur=queue[0]; cur.t0=lastT||performance.now(); layout(); stats();
 }
 function skip(){ if(waiting||!cur) return; record(true); next(); }
 function reveal(){ cur.notes.forEach(function(n){ var el=keyEls[n.midi]; if(el) el.classList.add("hint"); }); }
@@ -339,16 +344,12 @@ function check(){
   if(ok){
     cur.el.style.color="var(--ok)"; record(false);
     msg("Correct. "+cur.sym+": "+names(cur).join(" \u2013 "),"ok");
-    if($("adv").checked) advT=setTimeout(next,700);
+    if($("adv").checked){ advOn=true; advT=setTimeout(function(){ advOn=false; next(); },viaMidi?150:400); }
   }else{
     cur.wrong++; wrongTotal++; stats();
     if(retry){
       msg("Not quite. Try again.","bad");
-      retryT=setTimeout(function(){
-        if(!cur||waiting) return;
-        clearKeys(); cur.el.querySelectorAll("ellipse").forEach(function(e){ e.style.stroke=""; });
-        selected={}; done=false; paint(); msg("");
-      },900);
+      retryOn=true; retryT=setTimeout(function(){ retryOn=false; resetAttempt(); },300);
     }else{
       var missing=cur.notes.filter(function(n){return !got[key(n.midi)]}).map(function(n){return n.name});
       msg("Not quite. "+(missing.length?"Missing "+missing.join(", ")+". ":"")+cur.sym+": "+names(cur).join(" \u2013 "),"bad");
@@ -390,7 +391,12 @@ function onMsg(ev){
   if(st===0x90&&vel>0){
     viaMidi=true;
     if(waiting){ begin(); return; }
-    if(done||!cur) return;
+    if(done){
+      if(advOn){ clearTimeout(advT); advOn=false; next(); }
+      else if(retryOn){ clearTimeout(retryT); retryOn=false; resetAttempt(); }
+      else return;
+    }
+    if(!cur) return;
     var m=note; while(m<START)m+=12; while(m>=START+48)m-=12;
     selected[m]=1; held[note]=m; paint();
     if($("auto").checked && Object.keys(selected).length>=cur.pcs.length) check();
