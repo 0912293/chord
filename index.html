@@ -29,7 +29,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline
 .b{position:absolute;top:0;width:2.2%;height:62%;background:var(--black);border-radius:0 0 4px 4px;cursor:pointer;z-index:2;border:0}
 .w.sel{background:var(--sel)}.b.sel{background:var(--accent)}
 .w.good{background:var(--ok)}.b.good{background:var(--ok)}
-.w.miss{box-shadow:inset 0 -10px 0 var(--bad)}.b.miss{box-shadow:inset 0 -10px 0 var(--bad)}
+.w.miss,.b.miss{background:var(--bad)}
 .w.hint::after,.b.hint::after{content:"";position:absolute;left:50%;bottom:8px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--accent)}
 .b.hint::after{bottom:14px;background:#fff}
 fieldset{border:1px solid var(--line);border-radius:10px;margin:18px 0 0;padding:10px 14px;background:var(--card)}
@@ -121,7 +121,7 @@ function build(){
     var t=e.target.closest("[data-m]");
     if(!t||+t.dataset.m!==p.m) return;
     if(Math.abs(e.clientX-p.x)>8||Math.abs(e.clientY-p.y)>8||Math.abs(wrap.scrollLeft-p.s)>2) return;
-    toggle(p.m,true);
+    viaMidi=false; toggle(p.m,true);
   });
   kb.addEventListener("pointercancel",function(){pd=null});
 }
@@ -149,7 +149,7 @@ function pcsOf(){ var s={}; Object.keys(selected).forEach(function(m){s[m%12]=1}
 function names(c){ return c.notes.map(function(x){return x.name}); }
 function msg(t,c){ var m=document.getElementById("msg"); m.textContent=t; m.className=c||""; }
 function activeTypes(){ return TYPES.filter(function(t){return document.getElementById("t_"+t.id).checked}); }
-var advT, LET="CDEFGAB", NAT=[0,2,4,5,7,9,11], ACC={"1":"\u266F","2":"\u266F\u266F","-1":"\u266D","-2":"\u266D\u266D"};
+var advT, retryT, LET="CDEFGAB", NAT=[0,2,4,5,7,9,11], ACC={"1":"\u266F","2":"\u266F\u266F","-1":"\u266D","-2":"\u266D\u266D"};
 function spell(r,t,clef){
   var li=LET.indexOf(r[0]), rp=ROOT_PC[r];
   var st=t.id==="sus4"?[0,3,4]:(t.iv.length===3?[0,2,4]:[0,2,4,6]);
@@ -210,7 +210,7 @@ function layout(){
 function clearKeys(){ for(var m in keyEls) keyEls[m].classList.remove("good","miss","hint"); }
 function showSym(on){ document.getElementById("sym").textContent=(on||document.getElementById("shown").checked)&&cur?cur.sym:""; }
 function reset(){
-  clearTimeout(advT);
+  clearTimeout(advT); clearTimeout(retryT);
   if(!activeTypes().length){ msg("Pick at least one chord type in settings.","bad"); return; }
   N=+document.getElementById("ahead").value;
   queue=[]; for(var i=0;i<N;i++) queue.push(makeChord());
@@ -219,7 +219,7 @@ function reset(){
   cur=queue[0]; selected={}; done=false; clearKeys(); paint(); layout(); showSym(false); msg("");
 }
 function next(){
-  clearTimeout(advT);
+  clearTimeout(advT); clearTimeout(retryT);
   if(!queue.length){ reset(); return; }
   var old=queue.shift();
   old.el.style.transform="translateX("+(X0-GAP)+"px)"; old.el.style.opacity=0;
@@ -238,8 +238,18 @@ function check(){
   var ok=gk.length===wk.length && gk.every(function(k){return want[k]});
   tries++; done=true;
   Object.keys(selected).forEach(function(m){ keyEls[m].classList.add(want[key(m)]?"good":"miss"); });
-  showSym(true);
+  var heads=cur.el.querySelectorAll("ellipse");
+  cur.notes.forEach(function(n,i){ heads[i].style.stroke=got[key(n.midi)]?"var(--ok)":"var(--bad)"; });
+  var retryMode=viaMidi&&!ok;
+  if(!retryMode) showSym(true);
   if(ok){ cur.el.style.color="var(--ok)"; score++; streak++; msg("Correct. "+cur.sym+": "+names(cur).join(" \u2013 "),"ok"); if(document.getElementById("adv").checked) advT=setTimeout(next,700); }
+  else if(retryMode){
+    streak=0; msg("Not quite. Try again.","bad");
+    retryT=setTimeout(function(){
+      clearKeys(); cur.el.querySelectorAll("ellipse").forEach(function(e){ e.style.stroke=""; });
+      selected={}; done=false; paint(); msg("");
+    },900);
+  }
   else{
     streak=0;
     var missing=cur.notes.filter(function(n){return !got[key(n.midi)]}).map(function(n){return n.name});
@@ -256,7 +266,7 @@ function stats(){
   document.getElementById("at").textContent=tries;
   document.getElementById("st").textContent=streak;
 }
-document.getElementById("check").onclick=check;
+document.getElementById("check").onclick=function(){ viaMidi=false; check(); };
 document.getElementById("clear").onclick=function(){ if(done) return; selected={}; paint(); };
 document.getElementById("next").onclick=next;
 document.getElementById("show").onclick=function(){
@@ -277,7 +287,7 @@ TYPES.forEach(function(t){
 });
 
 // Optional MIDI input
-var held={};
+var held={}, viaMidi=false;
 document.getElementById("midibtn").onclick=function(){
   var s=document.getElementById("midistatus");
   if(!navigator.requestMIDIAccess){ s.textContent="This browser has no MIDI support. Open the link in Chrome."; return; }
@@ -286,7 +296,7 @@ document.getElementById("midibtn").onclick=function(){
     if(st===0x90&&vel>0){
       if(done||settingsOpen) return;
       var m=note; while(m<START)m+=12; while(m>=START+48)m-=12;
-      selected[m]=1; held[note]=m; paint();
+      selected[m]=1; held[note]=m; paint(); viaMidi=true;
       if(document.getElementById("auto").checked && cur && Object.keys(selected).length>=cur.pcs.length) check();
     }else if(st===0x80||(st===0x90&&vel===0)){
       if(!done&&held[note]!==undefined){ delete selected[held[note]]; delete held[note]; paint(); }
