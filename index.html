@@ -30,6 +30,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .kbwrap{overflow-x:auto;margin-top:14px;padding-bottom:4px}
 #kb{position:relative;height:170px;min-width:760px;display:flex;user-select:none;touch-action:manipulation}
 .midi .kbwrap,.midi #clear{display:none}
+#quit{margin-left:auto}
+.midi.focus.playing h1,.midi.focus.playing .stats,.midi.focus.playing #s-play .row{display:none}
+.midi.focus.playing:not(.waiting) #msg,.midi.focus.playing:not(.waiting) #cap{display:none}
+.midi.focus.playing .stage{border:0;background:transparent;padding:0}
+.midi.focus.playing #staff{max-height:72vh}
 .w{flex:1;background:var(--key);border:1px solid #9aa7a3;border-radius:0 0 5px 5px;cursor:pointer;position:relative}
 .b{position:absolute;top:0;width:2.2%;height:62%;background:var(--black);border-radius:0 0 4px 4px;cursor:pointer;z-index:2;border:0}
 .w.sel{background:var(--sel)}.b.sel{background:var(--accent)}
@@ -91,6 +96,7 @@ main{padding-top:8px;padding-bottom:12px}h1{font-size:1.05rem}.top{margin-bottom
 </fieldset>
 <fieldset><legend>MIDI keyboard</legend>
   <button id="midibtn">Use a MIDI keyboard</button> <span id="midistatus"></span>
+  <label><input type="checkbox" id="focus" checked> Minimal screen while playing with MIDI (only the staff)</label>
   <span class="hintx">When a MIDI keyboard is connected, the on-screen keyboard is hidden and a wrong answer lets you try again.</span>
 </fieldset>
 <div class="row"><button class="primary big" id="start">Start session</button></div>
@@ -208,7 +214,7 @@ function msg(t,c){ var m=$("msg"); m.textContent=t||""; m.className=c||""; }
 function activeTypes(){ return TYPES.filter(function(t){return $("t_"+t.id).checked}); }
 function showSym(on){ $("sym").textContent=(on||$("shown").checked)&&cur?cur.sym:""; }
 function stats(){ $("qn").textContent=Math.min(rec.length+1,total); $("qt").textContent=total; $("wr").textContent=wrongTotal; }
-function screen(n){ ["setup","play","results"].forEach(function(x){ $("s-"+x).hidden=x!==n; }); $("quit").hidden=n!=="play"; }
+function screen(n){ ["setup","play","results"].forEach(function(x){ $("s-"+x).hidden=x!==n; }); $("quit").hidden=n!=="play"; document.body.classList.toggle("playing",n==="play"); document.body.classList.toggle("waiting",waiting); }
 
 function spell(r,t,clef){
   var p=parse(r), li=p.l, rp=p.pc;
@@ -294,7 +300,7 @@ function startSession(){
   window.scrollTo(0,0);
 }
 function begin(){
-  waiting=false; msg("");
+  waiting=false; document.body.classList.remove("waiting"); msg("");
   for(var i=0;i<N;i++) queue.push(makeChord());
   queue.forEach(function(c,i){ mkG(c,i); });
   cur=queue[0]; cur.t0=performance.now(); layout(); showSym(false);
@@ -421,6 +427,8 @@ $("clear").onclick=function(){ if(done||waiting) return; selected={}; paint(); }
 $("next").onclick=skip;
 $("show").onclick=function(){ if(!cur||waiting) return; done=true; reveal(); showSym(true); msg(cur.sym+": "+names(cur).join(" \u2013 "),"bad"); };
 $("midibtn").onclick=connectMidi;
+$("focus").onchange=function(){ document.body.classList.toggle("focus",$("focus").checked); };
+document.body.classList.toggle("focus",$("focus").checked);
 document.addEventListener("keydown",function(e){
   var tg=e.target.tagName;
   if(e.key!=="Enter"||tg==="INPUT"||tg==="BUTTON"||tg==="SELECT"||$("s-play").hidden) return;
